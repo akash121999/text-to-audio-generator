@@ -1,0 +1,6 @@
+{
+  "name": "VoxGen TTS",
+  "description": "Professional Text-to-Speech generator with multiple voices, styles, and real-time controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
