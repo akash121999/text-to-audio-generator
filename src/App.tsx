@@ -59,6 +59,18 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  React.useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -181,44 +193,51 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
-      <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#1A1A1A] rounded-xl flex items-center justify-center shadow-lg">
-              <Volume2 className="text-white w-6 h-6" />
+      <header className="border-b border-gray-200 bg-white sticky top-0 z-50 transition-colors">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#1A1A1A] rounded-xl flex items-center justify-center shadow-lg">
+              <Volume2 className="text-white w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-black">VoxGen</h1>
-              <p className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">Active Hybrid Mode</p>
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-black">VoxGen</h1>
+              <p className="text-[9px] sm:text-[10px] text-gray-400 font-mono uppercase tracking-widest hidden sm:block">Active Hybrid Mode</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100 text-[10px] font-bold uppercase tracking-wider">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            Gemini Core Active
+          <div className="flex items-center gap-2">
+            {isOffline && (
+              <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-bold uppercase border border-amber-100">
+                Offline
+              </div>
+            )}
+            <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="hidden xs:inline text-green-500 font-bold">•</span> Gemini Core
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 space-y-6">
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col h-[520px]">
-              <div className="p-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
-                  <Mic2 className="w-4 h-4" />
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+          <div className="lg:col-span-7 space-y-4 sm:space-y-6">
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex flex-col h-[400px] sm:h-[520px]">
+              <div className="p-3 sm:p-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-600">
+                  <Mic2 className="w-3.5 h-3.5 sm:w-4 h-4" />
                   Script Editor
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4">
                   <button 
                     onClick={() => {
                       setIsMultiSpeaker(true);
                       setText("Speaker 1: Hello, how are you today?\nSpeaker 2: I'm doing great, thank you for asking!");
                     }}
-                    className="text-[10px] text-black hover:underline font-bold"
+                    className="text-[9px] sm:text-[10px] text-black hover:underline font-bold"
                   >
-                    Try Dialogue Ex.
+                    Try Dialogue
                   </button>
-                  <div className="text-[10px] font-mono text-gray-400">
+                  <div className="text-[9px] sm:text-[10px] font-mono text-gray-400">
                     {text.length} / {maxChars}
                   </div>
                 </div>
@@ -229,22 +248,23 @@ export default function App() {
                 onChange={(e) => setText(e.target.value)}
                 placeholder={isMultiSpeaker 
                   ? "Speaker 1: [Text]\nSpeaker 2: [Text]" 
-                  : "Type your script here... Use Gemini voices for instant generation."}
-                className="flex-1 w-full p-8 resize-none focus:outline-none text-lg text-gray-700 leading-relaxed font-sans"
+                  : "Type your script here..."}
+                style={{ WebkitOverflowScrolling: 'touch' }}
+                className="flex-1 w-full p-4 sm:p-8 resize-none focus:outline-none text-base sm:text-lg text-gray-700 leading-relaxed font-sans"
               />
               
-              <div className="p-6 bg-white border-t border-gray-50 flex items-center justify-between">
-                <button onClick={() => setText("")} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 text-sm">
-                  <Trash2 className="w-4 h-4" /> Clear
+              <div className="p-4 sm:p-6 bg-white border-t border-gray-50 flex items-center justify-between">
+                <button onClick={() => setText("")} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 text-xs sm:text-sm p-2 -ml-2">
+                  <Trash2 className="w-3.5 h-3.5 sm:w-4 h-4" /> Clear
                 </button>
                 
                 <button
                   onClick={handleGenerate}
-                  disabled={isGenerating || !text.trim()}
-                  className="bg-[#1A1A1A] text-white px-10 py-4 rounded-2xl font-bold flex items-center gap-3 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+                  disabled={isGenerating || !text.trim() || isOffline}
+                  className="bg-[#1A1A1A] text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold flex items-center gap-2 sm:gap-3 hover:bg-black transition-all active:scale-95 disabled:opacity-50 touch-manipulation"
                 >
-                  {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                  Generate Speech
+                  {isGenerating ? <Loader2 className="w-4 h-4 sm:w-5 h-5 animate-spin" /> : <RefreshCw className="w-4 h-4 sm:w-5 h-5" />}
+                  <span className="text-sm sm:text-base">Generate</span>
                 </button>
               </div>
             </div>
@@ -318,27 +338,27 @@ export default function App() {
                     <span className="text-[10px] text-gray-400 font-mono italic">
                       {isMultiSpeaker ? "Speaker 1 Voice" : "Primary Voice"}
                     </span>
-                    <div className="grid grid-cols-2 gap-3">
-                      {VOICES.map((v) => (
-                        <div key={`s1-${v.id}`} className="relative group">
-                          <button
-                            onClick={() => setSelectedVoice(v)}
-                            className={`w-full p-4 rounded-2xl border text-left transition-all pr-12 ${
-                              selectedVoice.id === v.id ? "border-black bg-gray-50 ring-2 ring-black/5" : "border-gray-100 hover:border-gray-200"
-                            }`}
-                          >
-                            <div className="font-bold text-[11px] truncate">{v.name}</div>
-                            <div className="text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handlePlaySample(v); }}
-                            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${isPlayingSample === v.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-100"}`}
-                          >
-                            {isPlayingSample === v.id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
-                          </button>
-                        </div>
-                      ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {VOICES.map((v) => (
+                    <div key={`s1-${v.id}`} className="relative group">
+                      <button
+                        onClick={() => setSelectedVoice(v)}
+                        className={`w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border text-left transition-all pr-10 sm:pr-12 touch-manipulation ${
+                          selectedVoice.id === v.id ? "border-black bg-gray-50 ring-2 ring-black/5" : "border-gray-100 hover:border-gray-200"
+                        }`}
+                      >
+                        <div className="font-bold text-[10px] sm:text-[11px] truncate">{v.name}</div>
+                        <div className="text-[8px] sm:text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handlePlaySample(v); }}
+                        className={`absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors touch-manipulation ${isPlayingSample === v.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-100"}`}
+                      >
+                        {isPlayingSample === v.id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
+                      </button>
                     </div>
+                  ))}
+                </div>
                   </div>
 
                   {/* Speaker 2 Selection (Only if multi-speaker active) */}
@@ -351,21 +371,21 @@ export default function App() {
                         className="space-y-3 pt-4 border-t border-gray-50 overflow-hidden"
                       >
                         <span className="text-[10px] text-gray-400 font-mono italic">Speaker 2 Voice</span>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {VOICES.map((v) => (
                             <div key={`s2-${v.id}`} className="relative group">
                               <button
                                 onClick={() => setSelectedVoice2(v)}
-                                className={`w-full p-4 rounded-2xl border text-left transition-all pr-12 ${
+                                className={`w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border text-left transition-all pr-10 sm:pr-12 touch-manipulation ${
                                   selectedVoice2.id === v.id ? "border-black bg-gray-50 ring-2 ring-black/5" : "border-gray-100 hover:border-gray-200"
                                 }`}
                               >
-                                <div className="font-bold text-[11px] truncate">{v.name}</div>
-                                <div className="text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
+                                <div className="font-bold text-[10px] sm:text-[11px] truncate">{v.name}</div>
+                                <div className="text-[8px] sm:text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handlePlaySample(v); }}
-                                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${isPlayingSample === v.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-100"}`}
+                                className={`absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors touch-manipulation ${isPlayingSample === v.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-100"}`}
                               >
                                 {isPlayingSample === v.id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
                               </button>
