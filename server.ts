@@ -20,16 +20,6 @@ async function startServer() {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  // Serve static files from public directory (for the generated audio)
-  app.use(express.static(path.join(process.cwd(), 'public')));
-
-  // Helper to get Gemini SDK instance
-  function getGenAI() {
-    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-    const key = rawKey.replace(/["']/g, "").trim();
-    return new GoogleGenAI({ apiKey: key });
-  }
-
   // Helper to wrap PCM in WAV
   function pcmToWavBuffer(base64Data: string, sampleRate = 24000): Buffer {
     const binaryString = Buffer.from(base64Data, 'base64');
@@ -53,8 +43,28 @@ async function startServer() {
     return Buffer.concat([wavHeader, binaryString]);
   }
 
-  // API Routes
+  // Log all requests for debugging
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
+  // API Routes MUST be registered before any fallback/Vite middleware
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      env: process.env.NODE_ENV,
+      time: new Date().toISOString()
+    });
+  });
+
   app.post("/api/tts", async (req, res) => {
+    console.log("Processing TTS request:", {
+      text: req.body.text?.substring(0, 50) + "...",
+      voice: req.body.voice,
+      provider: req.body.provider
+    });
+
     try {
       const { text, voice, style, provider, isMultiSpeaker, voice2 } = req.body;
 
@@ -62,86 +72,90 @@ async function startServer() {
         return res.status(400).json({ error: "Text is required and must be under 2000 characters." });
       }
 
-      // Generate a unique hash for caching
+      // Use a consistent temp directory that works in both dev and prod
+      // We'll use process.cwd() + 'public/audio' which is served by express.static
       const hashData = `${text}-${voice}-${voice2 || ""}-${style}-${provider}-${isMultiSpeaker}`;
       const hash = crypto.createHash('md5').update(hashData).digest('hex');
       const fileName = `${hash}.wav`;
       const filePath = path.join(tempDir, fileName);
       const publicPath = `/audio/${fileName}`;
 
-      // Check cache
       if (fs.existsSync(filePath)) {
         return res.json({ url: publicPath });
       }
 
-      if (provider === "gemini") {
-        const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-        const key = rawKey.replace(/["']/g, "").trim();
-        
-        if (!key || key === "MY_GEMINI_API_KEY") {
-          return res.status(400).json({ 
-            error: "Gemini API key is invalid or missing. Please set 'GEMINI_API_KEY' in your Secrets (sidebar) with a valid 'AIza...' key. Make sure to use the actual key, not the placeholder text.",
-            code: "INVALID_GEMINI_KEY"
-          });
-        }
+      const key = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").replace(/["']/g, "").trim();
+      
+      if (!key || key === "MY_GEMINI_API_KEY") {
+        return res.status(401).json({ 
+          error: "Gemini API key is missing. Please add 'GEMINI_API_KEY' to your Secrets.",
+          code: "MISSING_KEY"
+        });
+      }
 
-        const ai = getGenAI();
-        let prompt = text;
-        if (!isMultiSpeaker && style && style !== "normal") {
-          prompt = `Say ${style === "news" ? "professionally" : style} tone: ${text}`;
-        }
+      const ai = new GoogleGenAI({ apiKey: key });
+      let prompt = text;
+      if (!isMultiSpeaker && style && style !== "normal") {
+        prompt = `Tone: ${style}. Text: ${text}`;
+      }
 
-        const config: any = {
-          responseModalities: [Modality.AUDIO],
+      const config: any = {
+        responseModalities: [Modality.AUDIO],
+      };
+
+      if (isMultiSpeaker) {
+        config.speechConfig = {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              { speaker: 'Speaker 1', voiceConfig: { prebuiltVoiceConfig: { voiceName: voice || 'Kore' } } },
+              { speaker: 'Speaker 2', voiceConfig: { prebuiltVoiceConfig: { voiceName: voice2 || 'Puck' } } }
+            ]
+          }
         };
+      } else {
+        config.speechConfig = {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice || "Kore" },
+          },
+        };
+      }
 
-        if (isMultiSpeaker) {
-          config.speechConfig = {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: [
-                {
-                  speaker: 'Speaker 1',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } }
-                },
-                {
-                  speaker: 'Speaker 2',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: voice2 } }
-                }
-              ]
-            }
-          };
-        } else {
-          config.speechConfig = {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: voice || "Kore" },
-            },
-          };
-        }
-
-        const response = await ai.models.generateContent({
+      // Try the modern TTS preview model first, fallback to flash if needed
+      let response;
+      try {
+        response = await ai.models.generateContent({
           model: "gemini-3.1-flash-tts-preview",
           contents: [{ parts: [{ text: prompt }] }],
           config
         });
-
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) {
-          throw new Error("Gemini failed to return audio data.");
-        }
-
-        const wavBuffer = pcmToWavBuffer(base64Audio);
-        await fs.promises.writeFile(filePath, wavBuffer);
-        return res.json({ url: publicPath });
-      } else {
-        return res.status(400).json({ error: "Unsupported provider requested." });
+      } catch (e) {
+        console.warn("TTS preview model failed, falling back to flash-latest", e);
+        response = await ai.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: [{ parts: [{ text: prompt }] }],
+          config
+        });
       }
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!base64Audio) {
+        throw new Error("No audio data returned from Gemini");
+      }
+
+      const wavBuffer = pcmToWavBuffer(base64Audio);
+      await fs.promises.writeFile(filePath, wavBuffer);
+      return res.json({ url: publicPath });
+
     } catch (error: any) {
-      console.error("TTS Error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate speech" });
+      console.error("TTS Route Error:", error);
+      res.status(500).json({ error: error.message || "Internal server error" });
     }
   });
 
-  // Vite middleware for development
+  // Static files from public (accessible in both dev and prod)
+  app.use(express.static(path.join(process.cwd(), 'public')));
+
+  // Vite or Production Fallback
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

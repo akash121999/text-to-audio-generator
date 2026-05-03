@@ -121,12 +121,19 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
-      
       if (!response.ok) {
-        throw { message: data.error, code: data.code };
+        const errorText = await response.text();
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorMessage;
+        } catch (e) {
+          errorMessage = `${errorMessage}: ${errorText.substring(0, 100)}...`;
+        }
+        throw new Error(errorMessage);
       }
 
+      const data = await response.json();
       setAudioUrl(data.url);
       // Force reload
       setTimeout(() => {
