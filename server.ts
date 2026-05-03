@@ -3,7 +3,6 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import cors from "cors";
-import OpenAI from "openai";
 import crypto from "crypto";
 
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -15,9 +14,6 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
-  // Correct initialization
-  const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
   // Ensure temp audio directory exists
   const tempDir = path.join(process.cwd(), 'public', 'audio');
   if (!fs.existsSync(tempDir)) {
@@ -26,6 +22,13 @@ async function startServer() {
 
   // Serve static files from public directory (for the generated audio)
   app.use(express.static(path.join(process.cwd(), 'public')));
+
+  // Helper to get Gemini SDK instance
+  function getGenAI() {
+    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+    const key = rawKey.replace(/["']/g, "").trim();
+    return new GoogleGenAI({ apiKey: key });
+  }
 
   // Helper to wrap PCM in WAV
   function pcmToWavBuffer(base64Data: string, sampleRate = 24000): Buffer {
@@ -53,14 +56,14 @@ async function startServer() {
   // API Routes
   app.post("/api/tts", async (req, res) => {
     try {
-      const { text, voice, speed, pitch, style, provider, isMultiSpeaker, voice2 } = req.body;
+      const { text, voice, style, provider, isMultiSpeaker, voice2 } = req.body;
 
       if (!text || text.length > 2000) {
         return res.status(400).json({ error: "Text is required and must be under 2000 characters." });
       }
 
       // Generate a unique hash for caching
-      const hashData = `${text}-${voice}-${voice2 || ""}-${speed}-${pitch}-${style}-${provider}-${isMultiSpeaker}`;
+      const hashData = `${text}-${voice}-${voice2 || ""}-${style}-${provider}-${isMultiSpeaker}`;
       const hash = crypto.createHash('md5').update(hashData).digest('hex');
       const fileName = `${hash}.wav`;
       const filePath = path.join(tempDir, fileName);
@@ -72,6 +75,17 @@ async function startServer() {
       }
 
       if (provider === "gemini") {
+        const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+        const key = rawKey.replace(/["']/g, "").trim();
+        
+        if (!key || key === "MY_GEMINI_API_KEY") {
+          return res.status(400).json({ 
+            error: "Gemini API key is invalid or missing. Please set 'GEMINI_API_KEY' in your Secrets (sidebar) with a valid 'AIza...' key. Make sure to use the actual key, not the placeholder text.",
+            code: "INVALID_GEMINI_KEY"
+          });
+        }
+
+        const ai = getGenAI();
         let prompt = text;
         if (!isMultiSpeaker && style && style !== "normal") {
           prompt = `Say ${style === "news" ? "professionally" : style} tone: ${text}`;
@@ -104,7 +118,7 @@ async function startServer() {
           };
         }
 
-        const response = await genAI.models.generateContent({
+        const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-tts-preview",
           contents: [{ parts: [{ text: prompt }] }],
           config
@@ -118,31 +132,8 @@ async function startServer() {
         const wavBuffer = pcmToWavBuffer(base64Audio);
         await fs.promises.writeFile(filePath, wavBuffer);
         return res.json({ url: publicPath });
-
       } else {
-        // OpenAI TTS Logic
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-          return res.status(400).json({ 
-            error: "OPENAI_API_KEY is missing. Please add it to 'Secrets' in the sidebar.",
-            code: "MISSING_KEY"
-          });
-        }
-
-        const openai = new OpenAI({ apiKey });
-        const mp3 = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: voice || "alloy",
-          input: text,
-          speed: parseFloat(speed) || 1.0,
-        });
-
-        const buffer = Buffer.from(await mp3.arrayBuffer());
-        // For OpenAI we use .wav extension in cache for simplicity or change it to .mp3
-        const mp3FileName = `${hash}.mp3`;
-        const mp3FilePath = path.join(tempDir, mp3FileName);
-        await fs.promises.writeFile(mp3FilePath, buffer);
-        return res.json({ url: `/audio/${mp3FileName}` });
+        return res.status(400).json({ error: "Unsupported provider requested." });
       }
     } catch (error: any) {
       console.error("TTS Error:", error);

@@ -23,28 +23,22 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 
 // Types
-type Provider = "openai" | "gemini";
 type Voice = { 
   id: string; 
   name: string; 
   gender: "Male" | "Female"; 
   accent: string; 
-  provider: Provider;
+  provider: "gemini";
   sampleText?: string;
 };
 type Style = "normal" | "storytelling" | "news" | "energetic";
 
 const VOICES: Voice[] = [
-  // Gemini Voices (Ready to use)
-  { id: "Kore", name: "Kore", gender: "Female", accent: "Soft", provider: "gemini", sampleText: "Hello, I am Kore. I can help you read your stories with a soft and clear touch." },
+  { id: "Kore", name: "Kore", gender: "Female", accent: "Balanced", provider: "gemini", sampleText: "Hello, I am Kore. I can help you read your stories with a soft and clear touch." },
   { id: "Puck", name: "Puck", gender: "Male", accent: "Deep", provider: "gemini", sampleText: "Greetings, I am Puck. My voice is deep and resonant, perfect for formal announcements." },
   { id: "Charon", name: "Charon", gender: "Male", accent: "Neutral", provider: "gemini", sampleText: "Hi, I am Charon. I provide a balanced and neutral tone for any kind of content." },
   { id: "Zephyr", name: "Zephyr", gender: "Female", accent: "Breezy", provider: "gemini", sampleText: "Hey there, I am Zephyr. My voice is light and energetic, great for keeping things moving." },
-  
-  // OpenAI Voices (Requires sk-... key)
-  { id: "alloy", name: "Alloy", gender: "Female", accent: "Professional", provider: "openai", sampleText: "Hello! I'm Alloy. I offer a professional and versatile studio-grade voice." },
-  { id: "echo", name: "Echo", gender: "Male", accent: "Professional", provider: "openai", sampleText: "Hi, I'm Echo. My voice is clear and authoritative, ideal for presentations." },
-  { id: "nova", name: "Nova", gender: "Female", accent: "Energetic", provider: "openai", sampleText: "Hey! I'm Nova. I bring high energy and excitement to your scripts." },
+  { id: "Fenrir", name: "Fenrir", gender: "Male", accent: "Strong", provider: "gemini", sampleText: "I am Fenrir. My voice is strong and clear, designed for impactful narration." },
 ];
 
 const STYLES: { id: Style; label: string; description: string }[] = [
@@ -60,7 +54,6 @@ export default function App() {
   const [selectedVoice2, setSelectedVoice2] = useState(VOICES[1]);
   const [isMultiSpeaker, setIsMultiSpeaker] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<Style>("normal");
-  const [speed, setSpeed] = useState(1.0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlayingSample, setIsPlayingSample] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -90,8 +83,7 @@ export default function App() {
         body: JSON.stringify({
           text: voice.sampleText || "This is a sample.",
           voice: voice.id,
-          speed: 1.0,
-          provider: voice.provider
+          provider: "gemini"
         }),
       });
       const data = await response.json();
@@ -123,9 +115,8 @@ export default function App() {
           text,
           voice: selectedVoice.id,
           voice2: selectedVoice2.id,
-          speed,
           style: selectedStyle,
-          provider: selectedVoice.provider,
+          provider: "gemini",
           isMultiSpeaker
         }),
       });
@@ -196,7 +187,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100 text-[10px] font-bold uppercase tracking-wider">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            Gemini Connected
+            Gemini Core Active
           </div>
         </div>
       </header>
@@ -291,16 +282,9 @@ export default function App() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 bg-red-50 border border-red-100 rounded-3xl space-y-3">
                 <div className="flex items-center gap-3 text-red-600 font-bold">
                   <AlertTriangle className="w-5 h-5" />
-                  {error.code === "KEY_MISMATCH" ? "API Key Configuration Error" : "Generation Error"}
+                  Generation Error
                 </div>
                 <p className="text-sm text-red-500 leading-relaxed">{error.message}</p>
-                {error.code === "KEY_MISMATCH" && (
-                  <div className="pt-2">
-                    <a href="https://platform.openai.com/api-keys" target="_blank" className="inline-flex items-center gap-2 text-xs font-bold text-red-700 hover:underline">
-                      Get OpenAI Key <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
               </motion.div>
             )}
           </div>
@@ -337,7 +321,7 @@ export default function App() {
                             }`}
                           >
                             <div className="font-bold text-[11px] truncate">{v.name}</div>
-                            <div className="text-[9px] opacity-40 uppercase font-mono">{v.provider}</div>
+                            <div className="text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
                           </button>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handlePlaySample(v); }}
@@ -361,7 +345,7 @@ export default function App() {
                       >
                         <span className="text-[10px] text-gray-400 font-mono italic">Speaker 2 Voice</span>
                         <div className="grid grid-cols-2 gap-3">
-                          {VOICES.filter(v => v.provider === "gemini").map((v) => (
+                          {VOICES.map((v) => (
                             <div key={`s2-${v.id}`} className="relative group">
                               <button
                                 onClick={() => setSelectedVoice2(v)}
@@ -370,7 +354,7 @@ export default function App() {
                                 }`}
                               >
                                 <div className="font-bold text-[11px] truncate">{v.name}</div>
-                                <div className="text-[9px] opacity-40 uppercase font-mono">{v.provider}</div>
+                                <div className="text-[9px] opacity-40 uppercase font-mono">{v.gender} • {v.accent}</div>
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handlePlaySample(v); }}
@@ -404,31 +388,13 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
-              {selectedVoice.provider === "openai" && (
-                <div className="space-y-4 pt-6 border-t border-gray-50">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tempo Offset</label>
-                    <span className="text-[10px] font-mono">{speed.toFixed(1)}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.1"
-                    value={speed}
-                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-gray-100 rounded-full appearance-none cursor-pointer accent-black"
-                  />
-                </div>
-              )}
             </div>
             
             <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 text-xs text-gray-400 leading-relaxed flex flex-col gap-3">
               <div className="flex items-center gap-2 font-bold text-gray-500 uppercase tracking-tighter">
                 <Info className="w-3 h-3" /> Quick Insight
               </div>
-              <p>Gemini voices are powered by your built-in project key and require no extra setup. OpenAI voices offer studio-grade consistency but require an external `sk-` key.</p>
+              <p>Gemini voices are powered by Google's native AI models. They support multi-speaker dialogues and multiple emotional styles out of the box.</p>
             </div>
           </div>
         </div>
